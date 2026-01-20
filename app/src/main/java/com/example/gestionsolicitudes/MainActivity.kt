@@ -7,13 +7,18 @@ import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.example.gestionsolicitudes.model.ServiceRequest
+import com.example.gestionsolicitudes.data.AppDatabase
+import com.example.gestionsolicitudes.data.ServiceRequestDao
+import com.example.gestionsolicitudes.data.ServiceRequestEntity
 import com.example.gestionsolicitudes.ui.ServiceRequestAdapter
-import android.widget.Toast
-import androidx.appcompat.app.AlertDialog
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
 
@@ -21,32 +26,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var tvEmpty: TextView
     private lateinit var btnAdd: Button
 
-    private val requests = mutableListOf<ServiceRequest>()
+    private lateinit var dao: ServiceRequestDao
+
+    private val requests = mutableListOf<ServiceRequestEntity>()
     private lateinit var adapter: ServiceRequestAdapter
 
     private val addRequestLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             if (result.resultCode == Activity.RESULT_OK) {
-                val data = result.data ?: return@registerForActivityResult
-
-                val client = data.getStringExtra(AddRequestActivity.EXTRA_CLIENT).orEmpty()
-                val type = data.getStringExtra(AddRequestActivity.EXTRA_TYPE).orEmpty()
-                val date = data.getStringExtra(AddRequestActivity.EXTRA_DATE).orEmpty()
-                val desc = data.getStringExtra(AddRequestActivity.EXTRA_DESC).orEmpty()
-
-                // Agregar a memoria
-                requests.add(
-                    ServiceRequest(
-                        clientName = client,
-                        serviceType = type,
-                        date = date,
-                        description = desc
-                    )
-                )
-                adapter.notifyItemInserted(requests.size - 1)
-                updateEmptyState()
-
-                Toast.makeText(this, getString(R.string.toast_saved), Toast.LENGTH_SHORT).show()
+                loadRequestsFromDb()
             }
         }
 
@@ -58,19 +46,19 @@ class MainActivity : AppCompatActivity() {
         tvEmpty = findViewById(R.id.tvEmpty)
         btnAdd = findViewById(R.id.btnAdd)
 
-        requests.clear()
-        requests.add(
-            ServiceRequest(
-                clientName = "Juan Pérez",
-                serviceType = "Electricidad",
-                date = "10/03/2026",
-                description = "No funciona el enchufe del living."
-            )
-        )
+        dao = AppDatabase.getInstance(this).serviceRequestDao()
 
-        adapter = ServiceRequestAdapter(requests) { position ->
-            showDeleteDialog(position)
-        }
+        adapter = ServiceRequestAdapter(
+            items = requests,
+            onItemClick = { item ->
+                val i = Intent(this, AddRequestActivity::class.java)
+                i.putExtra(AddRequestActivity.EXTRA_ID, item.id)
+                addRequestLauncher.launch(i)
+            },
+            onDeleteClick = { item ->
+                showDeleteDialog(item)
+            }
+        )
 
         rvRequests.layoutManager = LinearLayoutManager(this)
         rvRequests.adapter = adapter
@@ -80,20 +68,30 @@ class MainActivity : AppCompatActivity() {
             addRequestLauncher.launch(i)
         }
 
-        updateEmptyState()
+        loadRequestsFromDb()
     }
 
-    private fun updateEmptyState() {
-        tvEmpty.visibility = if (requests.isEmpty()) View.VISIBLE else View.GONE
+    private fun loadRequestsFromDb() {
+        lifecycleScope.launch {
+            val list = withContext(Dispatchers.IO) {
+                dao.getAll()
+            }
+            adapter.setItems(list)
+            tvEmpty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+        }
     }
 
-    private fun showDeleteDialog(position: Int) {
+    private fun showDeleteDialog(item: ServiceRequestEntity) {
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.dialog_delete_title))
             .setMessage(getString(R.string.dialog_delete_msg))
             .setPositiveButton(getString(R.string.dialog_yes)) { _, _ ->
-                adapter.removeAt(position)
-                updateEmptyState()
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) {
+                        dao.delete(item)
+                    }
+                    loadRequestsFromDb()
+                }
             }
             .setNegativeButton(getString(R.string.dialog_no), null)
             .show()

@@ -7,11 +7,12 @@ import android.widget.ImageButton
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.example.gestionsolicitudes.R
-import com.example.gestionsolicitudes.model.ServiceRequest
+import com.example.gestionsolicitudes.data.ServiceRequestEntity
 
 class ServiceRequestAdapter(
-    private val items: MutableList<ServiceRequest>,
-    private val onDeleteClick: (position: Int) -> Unit
+    private val items: MutableList<ServiceRequestEntity>,
+    private val onItemClick: (item: ServiceRequestEntity) -> Unit,
+    private val onDeleteClick: (item: ServiceRequestEntity) -> Unit
 ) : RecyclerView.Adapter<ServiceRequestAdapter.ViewHolder>() {
 
     class ViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -19,6 +20,7 @@ class ServiceRequestAdapter(
         val tvTypeDate: TextView = itemView.findViewById(R.id.tvTypeDate)
         val tvDescription: TextView = itemView.findViewById(R.id.tvDescription)
         val btnDelete: ImageButton = itemView.findViewById(R.id.btnDelete)
+        val root: View = itemView
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
@@ -34,18 +36,20 @@ class ServiceRequestAdapter(
         holder.tvTypeDate.text = "${item.serviceType} • ${item.date}"
         holder.tvDescription.text = item.description
 
+        holder.root.setOnClickListener {
+            onItemClick(item)
+        }
+
         holder.btnDelete.setOnClickListener {
-            onDeleteClick(position)
+            onDeleteClick(item)
         }
     }
 
     override fun getItemCount(): Int = items.size
 
-    fun removeAt(position: Int) {
-        if (position in 0 until items.size) {
-            items.removeAt(position)
-            notifyItemRemoved(position)
-            notifyItemRangeChanged(position, items.size)
-        }
+    fun setItems(newItems: List<ServiceRequestEntity>) {
+        items.clear()
+        items.addAll(newItems)
+        notifyDataSetChanged()
     }
 }

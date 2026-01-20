@@ -20,4 +20,6 @@
     <string name="dialog_delete_msg">¿Seguro que deseas eliminar esta solicitud?</string>
     <string name="dialog_yes">Sí, eliminar</string>
     <string name="dialog_no">Cancelar</string>
+    <string name="toast_updated">Solicitud actualizada</string>
+    <string name="title_edit_request">Editar solicitud</string>
 </resources>
