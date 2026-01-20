@@ -1,0 +1,23 @@
+<resources>
+    <string name="app_name">Gestión de Solicitudes</string>
+
+    <!-- Pantalla A -->
+    <string name="title_requests">Solicitudes de Servicio</string>
+    <string name="btn_add">Agregar</string>
+    <string name="empty_list">Aún no hay solicitudes. Presiona “Agregar”.</string>
+
+    <!-- Pantalla B -->
+    <string name="title_add_request">Nueva solicitud</string>
+    <string name="hint_client_name">Nombre del cliente</string>
+    <string name="label_service_type">Tipo de servicio</string>
+    <string name="hint_date">Fecha (dd/mm/aaaa)</string>
+    <string name="hint_description">Descripción</string>
+    <string name="btn_save">Guardar</string>
+
+    <!-- Toast / Dialog -->
+    <string name="toast_saved">Solicitud guardada</string>
+    <string name="dialog_delete_title">Eliminar solicitud</string>
+    <string name="dialog_delete_msg">¿Seguro que deseas eliminar esta solicitud?</string>
+    <string name="dialog_yes">Sí, eliminar</string>
+    <string name="dialog_no">Cancelar</string>
+</resources>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string-array name="service_types">
+        <item>Electricidad</item>
+        <item>Gasfitería</item>
+        <item>Limpieza</item>
+        <item>Jardinería</item>
+        <item>Soporte Técnico</item>
+        <item>Otro</item>
+    </string-array>
+</resources>
