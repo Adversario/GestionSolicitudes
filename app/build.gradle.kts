@@ -49,4 +49,5 @@ dependencies {
     implementation("androidx.room:room-ktx:2.8.4")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     ksp("androidx.room:room-compiler:2.8.4")
+    debugImplementation("com.squareup.leakcanary:leakcanary-android:2.14")
 }

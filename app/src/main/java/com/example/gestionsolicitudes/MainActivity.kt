@@ -17,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.gestionsolicitudes.data.AppDatabase
 import com.example.gestionsolicitudes.data.ServiceRequestDao
 import com.example.gestionsolicitudes.data.ServiceRequestEntity
+import com.example.gestionsolicitudes.leaks.LeakHolder
 import com.example.gestionsolicitudes.ui.ServiceRequestAdapter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -39,6 +40,7 @@ class MainActivity : AppCompatActivity() {
         const val TAG_DATA = "DATA_LAYER"
         const val TAG_DB = "DB_LAYER"
         const val TAG_ERR = "ERROR_HANDLER"
+        const val TAG_MEM = "MEMORY_FIX"
     }
 
     private val addRequestLauncher =
@@ -79,7 +81,24 @@ class MainActivity : AppCompatActivity() {
             addRequestLauncher.launch(intent)
         }
 
+        /*
+         ❌ FUGA INTENCIONAL (Semana 5 - Diagnóstico)
+         Con esto MainActivity queda retenida al rotar/navegar porque un singleton guarda la Activity.
+
+         LeakHolder.leakedActivity = this
+        */
+
         loadRequests()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+
+        // ✅ Limpieza defensiva: si alguien llegara a asignar la Activity al singleton, la liberamos aquí
+        if (LeakHolder.leakedActivity === this) {
+            LeakHolder.leakedActivity = null
+            Log.d(TAG_MEM, "LeakHolder.leakedActivity limpiado en onDestroy()")
+        }
     }
 
     // ---------------------------
@@ -131,7 +150,6 @@ class MainActivity : AppCompatActivity() {
         // Evitar loop gigante: hacemos una operación pequeña proporcional a la lista
         val suffix = " (proc)"
         return list.map { item ->
-            // Evita concatenar muchas veces strings grandes; solo una vez por item
             item.copy(description = item.description + suffix)
         }
     }
@@ -143,6 +161,7 @@ class MainActivity : AppCompatActivity() {
     private fun showDeleteDialog(item: ServiceRequestEntity) {
         AlertDialog.Builder(this)
             .setTitle(getString(R.string.dialog_delete_title))
+            // ✅ En tu proyecto el string correcto es dialog_delete_msg (NO dialog_delete_message)
             .setMessage(getString(R.string.dialog_delete_msg))
             .setPositiveButton(getString(R.string.dialog_yes)) { _, _ ->
 
