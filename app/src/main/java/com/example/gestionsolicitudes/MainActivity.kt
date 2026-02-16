@@ -2,7 +2,9 @@ package com.example.gestionsolicitudes
 
 import android.app.Activity
 import android.content.Intent
+import android.database.sqlite.SQLiteException
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.Button
 import android.widget.TextView
@@ -18,7 +20,6 @@ import com.example.gestionsolicitudes.data.ServiceRequestEntity
 import com.example.gestionsolicitudes.ui.ServiceRequestAdapter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
@@ -33,16 +34,12 @@ class MainActivity : AppCompatActivity() {
     private val requests = mutableListOf<ServiceRequestEntity>()
     private lateinit var adapter: ServiceRequestAdapter
 
-    /**
-     * Semana 3:
-     * - true  => ANTES (freeze)
-     * - false => DESPUÉS (coroutines correcto)
-     *
-     * Para capturas:
-     * 1) pon true, saca capturas ANTES
-     * 2) pon false, saca capturas DESPUÉS
-     */
-    private val PERFORMANCE_MODE_BEFORE = false
+    companion object {
+        const val TAG_UI = "UI_LAYER"
+        const val TAG_DATA = "DATA_LAYER"
+        const val TAG_DB = "DB_LAYER"
+        const val TAG_ERR = "ERROR_HANDLER"
+    }
 
     private val addRequestLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -65,9 +62,9 @@ class MainActivity : AppCompatActivity() {
         adapter = ServiceRequestAdapter(
             items = requests,
             onItemClick = { item ->
-                val i = Intent(this, AddRequestActivity::class.java)
-                i.putExtra(AddRequestActivity.EXTRA_ID, item.id)
-                addRequestLauncher.launch(i)
+                val intent = Intent(this, AddRequestActivity::class.java)
+                intent.putExtra(AddRequestActivity.EXTRA_ID, item.id)
+                addRequestLauncher.launch(intent)
             },
             onDeleteClick = { item ->
                 showDeleteDialog(item)
@@ -78,88 +75,64 @@ class MainActivity : AppCompatActivity() {
         rvRequests.adapter = adapter
 
         btnAdd.setOnClickListener {
-            val i = Intent(this, AddRequestActivity::class.java)
-            addRequestLauncher.launch(i)
+            val intent = Intent(this, AddRequestActivity::class.java)
+            addRequestLauncher.launch(intent)
         }
 
         loadRequests()
     }
 
+    // ---------------------------
+    // FLUJO CRÍTICO
+    // ---------------------------
     private fun loadRequests() {
-        if (PERFORMANCE_MODE_BEFORE) {
-            loadRequests_BEFORE_freezeMainThread()
-        } else {
-            loadRequests_AFTER_coroutines()
-        }
-    }
 
-    // -------------------------
-    // ANTES (freeze intencional)
-    // -------------------------
-    private fun loadRequests_BEFORE_freezeMainThread() {
-        showLoading(true)
-
-        val list: List<ServiceRequestEntity> = runBlocking {
-            withContext(Dispatchers.IO) { dao.getAll() }
-        }
-
-        val processed = heavyProcessing_BAD_onMainThread(list)
-
-        adapter.setItems(processed)
-        tvEmpty.visibility = if (processed.isEmpty()) View.VISIBLE else View.GONE
-
-        showLoading(false)
-    }
-
-    private fun heavyProcessing_BAD_onMainThread(list: List<ServiceRequestEntity>): List<ServiceRequestEntity> {
-        Thread.sleep(2000)
-
-        var junk = 0L
-        for (i in 1..8_000_000) {
-            junk += (i % 3)
-        }
-
-        return list.map { item ->
-            item.copy(description = item.description + " (prep:$junk)")
-        }
-    }
-
-    // -------------------------
-    // DESPUÉS (coroutines bien)
-    // -------------------------
-    private fun loadRequests_AFTER_coroutines() {
+        Log.i(TAG_UI, "Inicio carga solicitudes")
         showLoading(true)
 
         lifecycleScope.launch {
-            // Todo lo pesado en background
-            val processed = withContext(Dispatchers.IO) {
-                val list = dao.getAll()
-                heavyProcessing_GOOD_inBackground(list)
+
+            try {
+                val processed = withContext(Dispatchers.IO) {
+
+                    Log.d(TAG_DB, "Consultando Room dao.getAll()")
+                    val list = dao.getAll()
+                    Log.i(TAG_DB, "Registros obtenidos=${list.size}")
+
+                    Log.d(TAG_DATA, "Procesando datos en background")
+                    val result = heavyProcessing(list)
+
+                    result
+                }
+
+                Log.d(TAG_UI, "Actualizando RecyclerView en Main")
+                adapter.setItems(processed)
+                tvEmpty.visibility = if (processed.isEmpty()) View.VISIBLE else View.GONE
+
+            } catch (e: SQLiteException) {
+                Log.e(TAG_ERR, "Error SQLite en carga de lista: ${e.message}", e)
+                tvEmpty.visibility = View.VISIBLE
+
+            } catch (e: Exception) {
+                Log.e(TAG_ERR, "Error general en carga de lista: ${e.message}", e)
+                tvEmpty.visibility = View.VISIBLE
+
+            } finally {
+                Log.i(TAG_UI, "Fin carga solicitudes")
+                showLoading(false)
             }
-
-            // Solo UI en Main
-            adapter.setItems(processed)
-            tvEmpty.visibility = if (processed.isEmpty()) View.VISIBLE else View.GONE
-
-            showLoading(false)
         }
     }
 
-    /**
-     * MISMO procesamiento pesado, pero corriendo en background (Dispatchers.IO).
-     * Mantiene evidencia comparable ANTES vs DESPUÉS.
-     */
-    private fun heavyProcessing_GOOD_inBackground(list: List<ServiceRequestEntity>): List<ServiceRequestEntity> {
-        // Simulación de carga pesada sin bloquear UI
-        Thread.sleep(2000)
+    private fun heavyProcessing(list: List<ServiceRequestEntity>): List<ServiceRequestEntity> {
+        // Simulación más “realista”: delay corto + procesamiento liviano
+        Thread.sleep(250)
 
-        var junk = 0L
-        for (i in 1..8_000_000) {
-            junk += (i % 3)
-        }
-
+        // Evitar loop gigante: hacemos una operación pequeña proporcional a la lista
+        val suffix = " (proc)"
         return list.map { item ->
-            item.copy(description = item.description + " (prep:$junk)")
+            // Evita concatenar muchas veces strings grandes; solo una vez por item
+            item.copy(description = item.description + suffix)
         }
     }
 
@@ -172,11 +145,21 @@ class MainActivity : AppCompatActivity() {
             .setTitle(getString(R.string.dialog_delete_title))
             .setMessage(getString(R.string.dialog_delete_msg))
             .setPositiveButton(getString(R.string.dialog_yes)) { _, _ ->
+
                 lifecycleScope.launch {
-                    withContext(Dispatchers.IO) {
-                        dao.delete(item)
+                    try {
+                        withContext(Dispatchers.IO) {
+                            dao.delete(item)
+                        }
+                        Log.i(TAG_DB, "Registro eliminado id=${item.id}")
+                        loadRequests()
+
+                    } catch (e: SQLiteException) {
+                        Log.e(TAG_ERR, "Error SQLite eliminando: ${e.message}", e)
+
+                    } catch (e: Exception) {
+                        Log.e(TAG_ERR, "Error general eliminando: ${e.message}", e)
                     }
-                    loadRequests()
                 }
             }
             .setNegativeButton(getString(R.string.dialog_no), null)

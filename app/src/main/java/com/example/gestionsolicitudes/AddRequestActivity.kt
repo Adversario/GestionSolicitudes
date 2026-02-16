@@ -2,7 +2,9 @@ package com.example.gestionsolicitudes
 
 import android.app.Activity
 import android.content.Intent
+import android.database.sqlite.SQLiteException
 import android.os.Bundle
+import android.util.Log
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.Spinner
@@ -32,6 +34,16 @@ class AddRequestActivity : AppCompatActivity() {
     private var editingId: Long? = null
     private var isEditMode: Boolean = false
 
+    companion object {
+        // ✅ SOLO 1 companion object (arregla el error)
+        const val TAG_UI = "UI_LAYER"
+        const val TAG_DB = "DB_LAYER"
+        const val TAG_ERR = "ERROR_HANDLER"
+
+        // ✅ EXTRA_ID existe aquí (arregla el Unresolved reference)
+        const val EXTRA_ID = "extra_id"
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_add_request)
@@ -47,20 +59,19 @@ class AddRequestActivity : AppCompatActivity() {
 
         setupSpinner()
 
-        // Modo Editar si viene un id
         editingId = intent.getLongExtra(EXTRA_ID, -1L).takeIf { it != -1L }
         isEditMode = editingId != null
 
         if (isEditMode) {
             tvTitleAdd.text = getString(R.string.title_edit_request)
+            Log.i(TAG_UI, "Modo EDITAR iniciado id=$editingId")
             loadRequestForEdit(editingId!!)
         } else {
             tvTitleAdd.text = getString(R.string.title_add_request)
+            Log.i(TAG_UI, "Modo CREAR iniciado")
         }
 
-        btnSave.setOnClickListener {
-            onSave()
-        }
+        btnSave.setOnClickListener { onSave() }
     }
 
     private fun setupSpinner() {
@@ -75,85 +86,124 @@ class AddRequestActivity : AppCompatActivity() {
 
     private fun loadRequestForEdit(id: Long) {
         lifecycleScope.launch {
-            val request = withContext(Dispatchers.IO) {
-                dao.getById(id)
-            }
-
-            if (request == null) {
-                Toast.makeText(this@AddRequestActivity, "No se encontró la solicitud", Toast.LENGTH_SHORT).show()
-                finish()
-                return@launch
-            }
-
-            etClientName.setText(request.clientName)
-            etDate.setText(request.date)
-            etDescription.setText(request.description)
-
-            // Seleccionar el tipo en Spinner
-            val spinnerAdapter = spServiceType.adapter
-            for (i in 0 until spinnerAdapter.count) {
-                if (spinnerAdapter.getItem(i).toString() == request.serviceType) {
-                    spServiceType.setSelection(i)
-                    break
+            try {
+                val request = withContext(Dispatchers.IO) {
+                    Log.d(TAG_DB, "Room SELECT getById($id)")
+                    dao.getById(id)
                 }
+
+                if (request == null) {
+                    Log.w(TAG_ERR, "No se encontró solicitud para editar id=$id")
+                    Toast.makeText(this@AddRequestActivity, "No se encontró la solicitud", Toast.LENGTH_SHORT).show()
+                    finish()
+                    return@launch
+                }
+
+                etClientName.setText(request.clientName)
+                etDate.setText(request.date)
+                etDescription.setText(request.description)
+
+                // Seleccionar tipo en spinner
+                val spinnerAdapter = spServiceType.adapter
+                for (i in 0 until spinnerAdapter.count) {
+                    if (spinnerAdapter.getItem(i).toString() == request.serviceType) {
+                        spServiceType.setSelection(i)
+                        break
+                    }
+                }
+
+            } catch (e: SQLiteException) {
+                Log.e(TAG_ERR, "Error SQLite cargando solicitud id=$id: ${e.message}", e)
+                Toast.makeText(this@AddRequestActivity, "Error de base de datos", Toast.LENGTH_SHORT).show()
+                finish()
+            } catch (e: Exception) {
+                Log.e(TAG_ERR, "Error general cargando solicitud id=$id: ${e.message}", e)
+                Toast.makeText(this@AddRequestActivity, "Error inesperado", Toast.LENGTH_SHORT).show()
+                finish()
             }
         }
     }
 
     private fun onSave() {
-        val clientName = etClientName.text?.toString()?.trim().orEmpty()
-        val serviceType = spServiceType.selectedItem?.toString().orEmpty()
-        val date = etDate.text?.toString()?.trim().orEmpty()
-        val description = etDescription.text?.toString()?.trim().orEmpty()
+        try {
+            // VALIDACIÓN (usuario)
+            val clientName = etClientName.text?.toString()?.trim().orEmpty()
+            val serviceType = spServiceType.selectedItem?.toString().orEmpty()
+            val date = etDate.text?.toString()?.trim().orEmpty()
+            val description = etDescription.text?.toString()?.trim().orEmpty()
 
-        // Validación mínima
-        var ok = true
-        if (clientName.isBlank()) { etClientName.error = "Ingresa el nombre"; ok = false }
-        if (date.isBlank()) { etDate.error = "Ingresa la fecha"; ok = false }
-        if (description.isBlank()) { etDescription.error = "Ingresa la descripción"; ok = false }
-        if (!ok) return
+            validateInputs(clientName, date, description)
 
-        lifecycleScope.launch {
-            withContext(Dispatchers.IO) {
-                if (isEditMode) {
-                    dao.update(
-                        ServiceRequestEntity(
-                            id = editingId!!,
-                            clientName = clientName,
-                            serviceType = serviceType,
-                            date = date,
-                            description = description
-                        )
-                    )
-                } else {
-                    dao.insert(
-                        ServiceRequestEntity(
-                            clientName = clientName,
-                            serviceType = serviceType,
-                            date = date,
-                            description = description
-                        )
-                    )
+            Log.i(TAG_UI, "Guardar presionado. ModoEditar=$isEditMode")
+
+            lifecycleScope.launch {
+                try {
+                    withContext(Dispatchers.IO) {
+                        if (isEditMode) {
+                            Log.d(TAG_DB, "Room UPDATE id=$editingId")
+                            dao.update(
+                                ServiceRequestEntity(
+                                    id = editingId!!,
+                                    clientName = clientName,
+                                    serviceType = serviceType,
+                                    date = date,
+                                    description = description
+                                )
+                            )
+                        } else {
+                            Log.d(TAG_DB, "Room INSERT nuevo")
+                            dao.insert(
+                                ServiceRequestEntity(
+                                    clientName = clientName,
+                                    serviceType = serviceType,
+                                    date = date,
+                                    description = description
+                                )
+                            )
+                        }
+                    }
+
+                    Toast.makeText(
+                        this@AddRequestActivity,
+                        if (isEditMode) getString(R.string.toast_updated) else getString(R.string.toast_saved),
+                        Toast.LENGTH_SHORT
+                    ).show()
+
+                    setResult(Activity.RESULT_OK, Intent())
+                    finish()
+
+                } catch (e: SQLiteException) {
+                    Log.e(TAG_ERR, "Error SQLite guardando: ${e.message}", e)
+                    Toast.makeText(this@AddRequestActivity, "Error de base de datos al guardar", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Log.e(TAG_ERR, "Error general guardando: ${e.message}", e)
+                    Toast.makeText(this@AddRequestActivity, "Error inesperado al guardar", Toast.LENGTH_SHORT).show()
                 }
             }
 
-            // Toast requerido en formulario
-            if (isEditMode) {
-                Toast.makeText(this@AddRequestActivity, getString(R.string.toast_updated), Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this@AddRequestActivity, getString(R.string.toast_saved), Toast.LENGTH_SHORT).show()
-            }
-
-            setResult(
-                Activity.RESULT_OK,
-                Intent().putExtra(EXTRA_WAS_EDIT, isEditMode)
-            )
-            finish()
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG_ERR, "Validación fallida: ${e.message}")
+            Toast.makeText(this, e.message ?: "Datos inválidos", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Log.e(TAG_ERR, "Error general en onSave: ${e.message}", e)
+            Toast.makeText(this, "Error inesperado", Toast.LENGTH_SHORT).show()
         }
     }
 
-    companion object {
-        const val EXTRA_ID = "extra_id"
-        const val EXTRA_WAS_EDIT = "extra_was_edit"
+    private fun validateInputs(clientName: String, date: String, description: String) {
+        var ok = true
+        if (clientName.isBlank()) {
+            etClientName.error = "Ingresa el nombre"
+            ok = false
+        }
+        if (date.isBlank()) {
+            etDate.error = "Ingresa la fecha"
+            ok = false
+        }
+        if (description.isBlank()) {
+            etDescription.error = "Ingresa la descripción"
+            ok = false
+        }
+        if (!ok) throw IllegalArgumentException("Completa los campos obligatorios")
     }
 }
