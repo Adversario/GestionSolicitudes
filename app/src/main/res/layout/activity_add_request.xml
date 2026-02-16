@@ -32,7 +32,9 @@
                 android:layout_height="wrap_content"
                 android:inputType="textPersonName"
                 android:minHeight="56dp"
-                android:textSize="16sp" />
+                android:textSize="16sp"
+                android:importantForAccessibility="yes"
+                android:contentDescription="Nombre del cliente" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <TextView
@@ -50,6 +52,26 @@
             android:minHeight="56dp"
             android:contentDescription="@string/label_service_type" />
 
+        <!-- NUEVO: Campo para "Otro" (oculto por defecto) -->
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/tilOtherService"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Especifica el servicio"
+            android:paddingTop="12dp"
+            android:visibility="gone">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/etOtherService"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textCapWords"
+                android:minHeight="56dp"
+                android:textSize="16sp"
+                android:importantForAccessibility="yes"
+                android:contentDescription="Especificar servicio" />
+        </com.google.android.material.textfield.TextInputLayout>
+
         <com.google.android.material.textfield.TextInputLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -60,9 +82,13 @@
                 android:id="@+id/etDate"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="text"
+                android:inputType="none"
                 android:minHeight="56dp"
-                android:textSize="16sp" />
+                android:textSize="16sp"
+                android:focusable="false"
+                android:clickable="true"
+                android:importantForAccessibility="yes"
+                android:contentDescription="Seleccionar fecha" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <com.google.android.material.textfield.TextInputLayout
@@ -79,7 +105,9 @@
                 android:minHeight="120dp"
                 android:textSize="16sp"
                 android:gravity="top"
-                android:maxLines="6" />
+                android:maxLines="6"
+                android:importantForAccessibility="yes"
+                android:contentDescription="Descripción del problema o solicitud" />
         </com.google.android.material.textfield.TextInputLayout>
 
         <com.google.android.material.button.MaterialButton

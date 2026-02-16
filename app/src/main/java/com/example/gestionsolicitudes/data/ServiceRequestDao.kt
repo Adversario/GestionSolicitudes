@@ -18,9 +18,17 @@ interface ServiceRequestDao {
     @Insert
     suspend fun insert(request: ServiceRequestEntity): Long
 
+    // Inserción en bloque
+    @Insert
+    suspend fun insertAll(items: List<ServiceRequestEntity>)
+
     @Update
     suspend fun update(request: ServiceRequestEntity)
 
     @Delete
     suspend fun delete(request: ServiceRequestEntity)
+
+    // Para evitar acumulación al sincronizar: borra solo los elementos de tipo "API"
+    @Query("DELETE FROM service_requests WHERE serviceType = :type")
+    suspend fun deleteByType(type: String)
 }
